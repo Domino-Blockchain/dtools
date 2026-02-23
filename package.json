@@ -1,0 +1,18 @@
+{
+  "type": "module",
+  "scripts": {
+    "test": "node full_test.js"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.28.5",
+    "babel-jest": "^30.2.0",
+    "jest": "^30.2.0"
+  },
+  "dependencies": {
+    "@metaplex-foundation/beet": "^0.7.2",
+    "@solana/buffer-layout": "^4.0.1",
+    "@solana/web3.js": "^1.98.4",
+    "bigint-buffer": "^1.1.5",
+    "buffer-layout": "^1.2.2"
+  }
+}
