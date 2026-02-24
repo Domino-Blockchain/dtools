@@ -9,7 +9,7 @@ import * as bip39 from 'bip39';
 import { derivePath } from 'ed25519-hd-key';
 import nacl from 'tweetnacl';
 
-const RPC_URL = 'https://api.testnet.domichain.io';
+const RPC_URL = 'https://api.devnet.domichain.io';
 const KEYPAIR_DIR = './keypairs';
 const MNEMONIC_PATH = path.join('./keypairs', 'mnemonic.txt');
 
@@ -75,6 +75,27 @@ function loadOrGenerateMnemonic() {
   return mnemonic;
 }
 
+/**
+ * Request airdrop for testing on devnet
+ */
+async function requestAirdrop(
+  connection,
+  publicKey,
+  amount
+) {
+  try {
+    console.log(`💰 Requesting ${amount} DOMI airdrop for ${publicKey.toBase58()}...`);
+    const signature = await connection.requestAirdrop(
+      publicKey,
+      amount * 1_000_000_000
+    );
+    await connection.confirmTransaction(signature);
+    console.log(`✓ Airdrop confirmed`);
+  } catch (error) {
+    console.warn(`⚠️  Airdrop failed (may have reached limit):`, error);
+  }
+}
+
 
 /**
  * Create wallet object for signing transactions
@@ -115,7 +136,7 @@ async function runProductionTest() {
 
   // 链接到多米链
   const connection = new Connection(RPC_URL, 'confirmed');
-
+  
   // Load or generate keypairs
   // 创建新钱包
   // No key phrase:
@@ -159,9 +180,7 @@ async function runProductionTest() {
     console.log(`  Recipient Balance: ${recipientBalance / 1e9} DOMI`);
     
     if (ownerBalance === 0) {
-      console.log('\n⚠️  WARNING: Owner account has zero balance!');
-      console.log('   Please fund the owner account before continuing.');
-      console.log(`   Address: ${ownerKeypair.publicKey.toBase58()}\n`);
+      await requestAirdrop(connection, ownerKeypair.publicKey, 1);
     }
   } catch (error) {
     console.error(`  Error checking balances: ${error.message}`);
