@@ -5,9 +5,13 @@ import { transferTokens, createAndInitializeTokenAccount} from './transfer.js';
 import { getNativeBalance, getTokenAccountBalance } from './balance.js';
 import fs from 'fs';
 import path from 'path';
+import * as bip39 from 'bip39';
+import { derivePath } from 'ed25519-hd-key';
+import nacl from 'tweetnacl';
 
 const RPC_URL = 'https://api.testnet.domichain.io';
 const KEYPAIR_DIR = './keypairs';
+const MNEMONIC_PATH = path.join('./keypairs', 'mnemonic.txt');
 
 // Ensure keypair directory exists
 if (!fs.existsSync(KEYPAIR_DIR)) {
@@ -31,6 +35,46 @@ function loadOrGenerateKeypair(filename) {
     return keypair;
   }
 }
+
+/**
+ * Take a keypair from a twelve-seed mnemonic
+ */
+export function keypairFromMnemonic(mnemonic, accountIndex = 0) {
+  if (!bip39.validateMnemonic(mnemonic)) {
+    throw new Error('Invalid mnemonic phrase');
+  }
+
+  const seed = bip39.mnemonicToSeedSync(mnemonic);
+
+  // Domi standard derivation path
+  const derivationPath = `m/44'/501'/${accountIndex}'/0'`;
+
+  const derivedSeed = derivePath(
+    derivationPath,
+    seed.toString('hex')
+  ).key;
+
+  const keypair = nacl.sign.keyPair.fromSeed(derivedSeed);
+
+  return Keypair.fromSecretKey(keypair.secretKey);
+}
+
+/**
+ * Load or generate a keypair from file Mnemonic version
+ */
+function loadOrGenerateMnemonic() {
+  if (fs.existsSync(MNEMONIC_PATH)) {
+    return fs.readFileSync(MNEMONIC_PATH, 'utf-8').trim();
+  }
+
+  const mnemonic = bip39.generateMnemonic(128); // 12 words
+  fs.writeFileSync(MNEMONIC_PATH, mnemonic);
+  console.log('\nGenerated New Mnemonic (SAVE THIS SAFELY):\n');
+  console.log(mnemonic);
+  console.log('\n');
+  return mnemonic;
+}
+
 
 /**
  * Create wallet object for signing transactions
@@ -74,12 +118,24 @@ async function runProductionTest() {
 
   // Load or generate keypairs
   // 创建新钱包
+  // No key phrase:
+  /*
   console.log('Loading/Generating Keypairs...');
   const ownerKeypair = loadOrGenerateKeypair('owner.json');
   const recipientKeypair = loadOrGenerateKeypair('recipient.json');
   const mintKeypair = loadOrGenerateKeypair('mint.json');
   const ownerTokenAccount = loadOrGenerateKeypair('owner-token-account.json');
   const recipientTokenAccount = loadOrGenerateKeypair('recipient-token-account.json');
+  */
+  
+  // With keyphrase
+  const mnemonic = loadOrGenerateMnemonic();
+
+  const ownerKeypair = keypairFromMnemonic(mnemonic, 0);
+  const recipientKeypair = keypairFromMnemonic(mnemonic, 1);
+  const mintKeypair = keypairFromMnemonic(mnemonic, 2);
+  const ownerTokenAccount = keypairFromMnemonic(mnemonic, 3);
+  const recipientTokenAccount = keypairFromMnemonic(mnemonic, 4);
 
   console.log('\n=======================================================');
   console.log('Account Addresses:');
@@ -217,11 +273,11 @@ async function runProductionTest() {
     if (!existingRecipientAccount) {
       console.log('Creating recipient token account...');
       // 创建代币接受账号
-      const recipientWallet = createWallet(recipientKeypair, [recipientTokenAccount]);
+      const payerWallet = createWallet(ownerKeypair, [recipientTokenAccount]);
       
       const txSig = await createAndInitializeTokenAccount({
         connection,
-        payer: recipientWallet,
+        payer: payerWallet,
         mintPublicKey: mintKeypair.publicKey,
         newAccount: recipientTokenAccount,
       });
